@@ -19,7 +19,7 @@ from scipy.stats import norm
 import pymatgen as mg
 import matplotlib.pyplot as plt
 
-def anaStruct(poscar, calcDistance=True, calcAngle=True, plot=True):
+def anaStruct(poscar, calcDistance=True, calcDistancesSlab=True, calcAngle=True, plot=True):
     """ main program """
 
     # load data
@@ -48,7 +48,20 @@ def anaStruct(poscar, calcDistance=True, calcAngle=True, plot=True):
             plt.title("Histogram of distances")
             plt.show()
 
-            
+    # distance analysis between layers, following z axis    
+    if calcDistancesSlab:
+        x, data = getDistancesSlab(struct, xmin, xmax)
+        if plot:
+            for bond, h in data.items():
+                plt.plot(x, h, label=bond)
+            plt.xlabel(r"distance   /   $\AA$")
+            plt.ylabel("Histogram")
+            plt.grid()
+            plt.legend()
+            plt.title("Histogram of distances in the Slab")
+            plt.show()
+
+       
 
     ## angle analysis
     amin        = 80.
@@ -195,6 +208,75 @@ def getDistances(struct, sigma, npts, xmin, xmax):
     open("anaDistances.dat", "w").write(line)
 
     return xval, data
+
+
+
+def getDistancesSlab(struct, xmin, xmax):
+    """ compute all atomic distances between layers, following z axis """
+
+    # system composition
+    atomTypes = [e.symbol for e in struct.composition.elements]
+    NAtomsType = len(struct.composition.elements)
+
+    print("\nBond length analyses :")                                                                              
+    print(  "----------------------")
+    print("Atoms   : ", " ; ".join(atomTypes))
+    print("N atoms : ", NAtomsType)
+
+    # bond types
+    bondsList = list()
+    for ityp in range(NAtomsType):
+        for jtyp in range(ityp, NAtomsType):
+            bondsList.append(atomTypes[ityp] + "-" + atomTypes[jtyp])
+
+    NBondsType = len(bondsList)
+    print("N bonds : ", (NBondsType))
+    print("Bonds   : " + " ; ".join(bondsList))
+
+    # histogram
+    data = dict()
+                                                                                                                   
+    # barycentre
+    Natoms = len(struct)                                                                                           
+    for iat in range(Natoms):
+        iname = struct[iat].specie.symbol
+        for jat in range(iat + 1, Natoms):
+            distance = struct.get_distance(iat, jat)
+            barycentre =  (struct.cart_coords[jat] +  struct.cart_coords[iat]) / 2
+
+            if not xmin < distance < xmax:
+                continue
+
+            jname = struct[jat].specie.symbol
+            if iname > jname:
+                selectedBond = iname + "-" + jname
+            else:
+                selectedBond = jname + "-" + iname
+
+            if selectedBond in data:
+                data[selectedBond].append([barycentre[2], distance])
+            else:
+                data[selectedBond] = list()
+                data[selectedBond].append([barycentre[2], distance])
+
+    print(bondsList)
+    # print data
+    line  = "# structural analysis \n"
+    line += "# column 1 : z barycentre (A)\n"
+    for selectedBond, v in data.items():
+        print("fichier",selectedBond)
+        with open("%s.dat" % selectedBond, "w") as toto:
+            lines = "# structural analysis n"
+            lines += "# column 1 : barycentre, colomne 2 : distance\n"
+            for z, d in v:
+                lines += "%8.3f %8.3f\n" % (z, d)
+#                print(z,d)
+            toto.write(lines)
+
+    return data
+
+
+
 
 if __name__ == "__main__":
     # poscar name
